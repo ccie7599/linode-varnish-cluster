@@ -11,9 +11,19 @@ provider "linode" {
   token = var.linode_token
 }
 
+locals {
+  varnish_public_ips = [
+    for instance in linode_instance.varnish : 
+    one([
+      for ip in instance.ipv4 :
+      ip if !startswith(ip, "192.") && !startswith(ip, "10.") && !startswith(ip, "172.")
+    ])
+  ]
+}
+
 resource "linode_instance" "varnish" {
   count       = var.varnish_nodes
-  label       = "varnish-${count.index}"
+  label       = "varnish1-${count.index}"
   image       = "linode/ubuntu22.04"
   region      = var.region
   type        = "g6-standard-2"
@@ -28,10 +38,7 @@ resource "null_resource" "configure_varnish" {
 
 connection {
   type        = "ssh"
-  host        = element([
-    for ip in linode_instance.varnish[count.index].ipv4 :
-    ip if !startswith(ip, "192.") && !startswith(ip, "10.") && !startswith(ip, "172.")
-  ], 0)
+  host        = local.varnish_public_ips[count.index]
   user        = "root"
   private_key = file(var.private_key_path)
   timeout     = "2m"
